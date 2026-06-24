@@ -989,15 +989,9 @@ input[type=range]{width:100%;height:5px;border-radius:10px;outline:none;cursor:p
   .trb-profile,.trb-hist,.trb-comp{display:none}
   /* Sur très petit écran : cacher les boutons secondaires top-right */
 }
-</style>
 
-<!-- Supabase Auth -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script>
-  const _sb = supabase.createClient('https://dbjefpiujpsiyvxbpjvi.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamVmcGl1anBzaXl2eGJwanZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNDExMzYsImV4cCI6MjA5NDYxNzEzNn0.vCryuf6Lj5qkRprdJn_e4mtWjdY4CJiuIqV6YFIXkfk');
-  const sb  = _sb;
-  let currentUser = null;
-</script>
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
 </head>
 <body>
 
@@ -1184,12 +1178,21 @@ input[type=range]{width:100%;height:5px;border-radius:10px;outline:none;cursor:p
 <!-- BOUTONS FLOTTANTS HAUT DROITE -->
 <div class="top-right-btns" id="top-right-btns">
 
+  <!-- Connexion : visible si non connecté, géré par updateAuthUI() -->
+  <button id="trb-btn-login" onclick="openAuthModal('login')"
+    style="display:none;align-items:center;gap:6px;padding:7px 16px;
+           background:var(--blue);color:#fff;border:none;border-radius:100px;
+           font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;
+           transition:all .18s;box-shadow:0 2px 8px rgba(37,99,235,.25);white-space:nowrap">
+    Connexion
+  </button>
+
   <button class="trb-hist" id="trb-btn-hist" onclick="togglePanel('hist')" title="Historique" style="position:relative">
     📂
     <span id="hist-badge" style="display:none;position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--purple);color:white;font-size:9px;font-weight:800;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.9)">0</span>
   </button>
   <button class="trb-profile" id="trb-btn-profile" onclick="toggleProfile()">
-    <div class="trb-av" id="trb-av">👤</div>
+    <div class="trb-av" id="trb-av">?</div>
     <span id="trb-label">Mon compte</span>
   </button>
 </div>
@@ -1349,11 +1352,30 @@ input[type=range]{width:100%;height:5px;border-radius:10px;outline:none;cursor:p
     </div>
   </div>
   <!-- Footer sticky -->
-  <div style="padding:16px 22px;border-top:1px solid var(--border);background:var(--surface)">
+  <div style="padding:16px 22px;border-top:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;gap:10px">
     <button class="profile-save-btn" onclick="saveProfile()">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 1H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4l-3-3z" stroke="white" stroke-width="1.5" stroke-linejoin="round"/><path d="M11 1v4H5V1M5 9h6M5 12h4" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       Sauvegarder le profil
     </button>
+    <!-- Bouton Se déconnecter -->
+    <button id="profile-logout-btn" onclick="doLogout()"
+      style="display:none;width:100%;padding:10px 16px;
+             background:var(--red-light);color:var(--red);
+             border:1.5px solid var(--red-mid);border-radius:var(--radius);
+             font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;
+             transition:all .15s;align-items:center;justify-content:center;gap:6px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      Se déconnecter
+    </button>
+    <!-- Indicateur de connexion -->
+    <div id="profile-connected-info"
+      style="display:none;align-items:center;gap:8px;padding:8px 12px;
+             background:var(--green-light);border-radius:var(--radius);
+             border:1px solid var(--green-mid)">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+      <span id="profile-connected-email"
+        style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-family:var(--font)"></span>
+    </div>
   </div>
 </div>
 
@@ -4779,236 +4801,212 @@ function sendSug(btn){document.getElementById('chat-in').value=btn.textContent;s
 
 </script>
 
-<!-- ═══════════════ AUTH MODAL ═══════════════ -->
-<div id="auth-overlay" onclick="if(event.target===this&&!authLocked)closeAuthModal()"
-  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;
-         align-items:center;justify-content:center;">
-  <div style="background:#1c1b19;border-radius:16px;padding:32px 28px;
-              width:min(440px,94vw);box-shadow:0 24px 64px #0008;
-              position:relative;max-height:90vh;overflow-y:auto;">
+<!-- ═══════════════════════════════════════════════════════════
+     INVESTIQ — AUTHENTIFICATION (Supabase)
+     Table SQL requise : analyses (id uuid default gen_random_uuid(),
+       userid text, nom text, datecreation timestamptz, params jsonb, resultats jsonb)
+═══════════════════════════════════════════════════════════════ -->
 
-    <!-- Logo + titre -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
-      <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
-        <rect width="40" height="40" rx="10" fill="#01696f"/>
-        <path d="M10 28L20 12L30 28" stroke="#fff" stroke-width="3.5"
-              stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="20" cy="28" r="2.5" fill="#4fd1c5"/>
+<!-- Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const sb = supabase.createClient(
+  'https://dbjefpiujpsiyvxbpjvi.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamVmcGl1anBzaXl2eGJwanZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNDExMzYsImV4cCI6MjA5NDYxNzEzNn0.vCryuf6Lj5qkRprdJne4mtWjdY4CJiuIqV6YFIXkfk'
+);
+let currentUser = null;
+</script>
+
+<!-- ── MODALE AUTH ── -->
+<style>
+/* Reset inputs dans la modale */
+#auth-overlay input{
+  font-family:var(--font);font-size:14px;color:var(--text);
+  background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:var(--radius);padding:10px 14px;width:100%;box-sizing:border-box;
+  outline:none;transition:border-color .15s;
+}
+#auth-overlay input:focus{ border-color:var(--blue); }
+#auth-overlay input::placeholder{ color:var(--text3); }
+#auth-btn-login,#auth-btn-signup{
+  font-family:var(--font);font-size:14px;font-weight:700;
+  background:var(--blue);color:#fff;border:none;
+  border-radius:var(--radius);padding:11px 16px;width:100%;
+  cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+#auth-btn-login:hover,#auth-btn-signup:hover{ background:#1d4ed8; }
+#auth-btn-login:disabled,#auth-btn-signup:disabled{ opacity:.5;cursor:not-allowed;pointer-events:none; }
+.auth-sep{position:relative;text-align:center;margin:14px 0}
+.auth-sep::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border)}
+.auth-sep span{position:relative;background:var(--surface);padding:0 10px;
+  font-size:12px;color:var(--text3);font-family:var(--font)}
+.auth-google-btn{
+  font-family:var(--font);font-size:13px;font-weight:600;
+  background:var(--surface2);color:var(--text);
+  border:1.5px solid var(--border);border-radius:var(--radius);
+  padding:10px 16px;width:100%;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.auth-google-btn:hover{ background:var(--surface);border-color:var(--border2); }
+#auth-msg.error{color:var(--red);background:var(--red-light);border:1px solid var(--red-mid);
+  padding:8px 12px;border-radius:var(--radius);font-size:13px;font-family:var(--font)}
+#auth-msg.success{color:var(--green);background:var(--green-light);border:1px solid var(--green-mid);
+  padding:8px 12px;border-radius:var(--radius);font-size:13px;font-family:var(--font)}
+#auth-msg.info{color:var(--blue);background:var(--blue-light);border:1px solid var(--blue-mid);
+  padding:8px 12px;border-radius:var(--radius);font-size:13px;font-family:var(--font)}
+#tab-login,#tab-signup{
+  font-family:var(--font);font-size:14px;font-weight:600;
+  flex:1;padding:9px 8px;background:none;border:none;cursor:pointer;
+  transition:all .15s;border-bottom:2.5px solid transparent;
+}
+#tab-login.active{ color:var(--blue);border-bottom-color:var(--blue); }
+#tab-signup.active{ color:var(--blue);border-bottom-color:var(--blue); }
+#tab-login:not(.active),#tab-signup:not(.active){ color:var(--text3); }
+.auth-link-btn{
+  background:none;border:none;color:var(--blue);font-size:12px;
+  font-family:var(--font);cursor:pointer;text-decoration:underline;padding:0;
+}
+@keyframes authFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+#auth-overlay > div{ animation:authFadeIn .2s ease; }
+</style>
+
+<div id="auth-overlay"
+  onclick="if(event.target===this&&!_authLocked)closeAuthModal()"
+  style="display:none;position:fixed;inset:0;background:rgba(15,27,61,.4);
+         z-index:9999;align-items:center;justify-content:center;
+         backdrop-filter:blur(4px)">
+
+  <div style="background:var(--surface);border-radius:var(--radius-xl);
+              padding:28px 28px 24px;width:min(420px,94vw);
+              box-shadow:var(--shadow-md);position:relative;
+              border:1.5px solid var(--border)">
+
+    <!-- Logo -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px">
+      <svg width="26" height="26" viewBox="0 0 40 40" fill="none">
+        <rect width="40" height="40" rx="10" fill="var(--blue)"/>
+        <path d="M10 28L20 12L30 28" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="20" cy="28" r="2.5" fill="#93c5fd"/>
       </svg>
-      <span style="font-size:18px;font-weight:700;color:#fff">InvestIQ</span>
+      <span style="font-size:17px;font-weight:800;color:var(--text);font-family:var(--font)">InvestIQ</span>
     </div>
 
     <!-- Onglets -->
-    <div id="auth-tabs" style="display:flex;gap:0;border-bottom:1px solid #333;margin-bottom:22px">
-      <button id="tab-login" onclick="switchAuthTab('login')"
-        style="flex:1;padding:9px;background:none;border:none;
-               border-bottom:2.5px solid #01696f;color:#fff;
-               font-weight:600;cursor:pointer;font-size:14px;transition:all .15s">
-        Connexion
-      </button>
-      <button id="tab-signup" onclick="switchAuthTab('signup')"
-        style="flex:1;padding:9px;background:none;border:none;
-               border-bottom:2.5px solid transparent;color:#888;
-               font-weight:600;cursor:pointer;font-size:14px;transition:all .15s">
-        Créer un compte
-      </button>
+    <div style="display:flex;border-bottom:1.5px solid var(--border);margin-bottom:20px" id="auth-tabs">
+      <button id="tab-login" class="active" onclick="switchAuthTab('login')">Connexion</button>
+      <button id="tab-signup" onclick="switchAuthTab('signup')">Créer un compte</button>
     </div>
 
     <!-- Message feedback -->
-    <div id="auth-msg" style="min-height:22px;font-size:13px;margin-bottom:12px;
-         text-align:center;border-radius:8px;padding:0 4px;transition:all .2s"></div>
+    <div id="auth-msg" style="min-height:0;margin-bottom:0;font-family:var(--font)"></div>
 
-    <!-- ===== FORMULAIRE CONNEXION ===== -->
-    <div id="auth-form-login">
-      <input id="auth-email-login" type="email" placeholder="Adresse email"
-        autocomplete="email"
-        style="width:100%;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-               background:#111;color:#fff;font-size:14px;margin-bottom:10px;box-sizing:border-box;
-               transition:border-color .15s;outline:none"
-        onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'">
-      <input id="auth-pw-login" type="password" placeholder="Mot de passe"
-        autocomplete="current-password"
-        style="width:100%;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-               background:#111;color:#fff;font-size:14px;margin-bottom:6px;box-sizing:border-box;
-               transition:border-color .15s;outline:none"
-        onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'"
+    <!-- ── FORMULAIRE CONNEXION ── -->
+    <div id="auth-form-login" style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <input id="auth-email-login" type="email" placeholder="Adresse email" autocomplete="email">
+      <input id="auth-pw-login" type="password" placeholder="Mot de passe" autocomplete="current-password"
         onkeydown="if(event.key==='Enter')doLogin()">
-      <div style="text-align:right;margin-bottom:14px">
-        <button onclick="showForgotPassword()"
-          style="background:none;border:none;color:#4f98a3;font-size:12px;
-                 cursor:pointer;padding:0;text-decoration:underline">
-          Mot de passe oublié ?
-        </button>
+      <div style="text-align:right;margin:-4px 0 2px">
+        <button class="auth-link-btn" onclick="showForgotPassword()">Mot de passe oublié ?</button>
       </div>
-      <button id="auth-btn-login" onclick="doLogin()"
-        style="width:100%;padding:12px;background:#01696f;color:#fff;border:none;
-               border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;
-               transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px">
-        Se connecter
-      </button>
-      <div style="position:relative;text-align:center;margin:16px 0">
-        <hr style="border:none;border-top:1px solid #333">
-        <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
-                     background:#1c1b19;padding:0 10px;color:#666;font-size:12px">ou</span>
-      </div>
-      <button onclick="doGoogleLogin()"
-        style="width:100%;padding:11px;background:#fff;color:#222;border:none;
-               border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
-               display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s"
-        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'">
-        <svg width="18" height="18" viewBox="0 0 48 48">
+      <button id="auth-btn-login" onclick="doLogin()">Se connecter</button>
+      <div class="auth-sep"><span>ou</span></div>
+      <button class="auth-google-btn" onclick="doGoogleLogin()">
+        <svg width="16" height="16" viewBox="0 0 48 48">
           <path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 5.1 29.6 3 24 3 12.9 3 4 11.9 4 23s8.9 20 20 20c11 0 19.7-7.9 19.7-20 0-1.3-.1-2.7-.2-4z"/>
         </svg>
         Continuer avec Google
       </button>
     </div>
 
-    <!-- ===== FORMULAIRE INSCRIPTION ===== -->
-    <div id="auth-form-signup" style="display:none">
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <input id="auth-prenom" type="text" placeholder="Prénom *"
-          autocomplete="given-name"
-          style="flex:1;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-                 background:#111;color:#fff;font-size:14px;box-sizing:border-box;
-                 transition:border-color .15s;outline:none"
-          onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'">
-        <input id="auth-nom" type="text" placeholder="Nom"
-          autocomplete="family-name"
-          style="flex:1;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-                 background:#111;color:#fff;font-size:14px;box-sizing:border-box;
-                 transition:border-color .15s;outline:none"
-          onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'">
+    <!-- ── FORMULAIRE INSCRIPTION ── -->
+    <div id="auth-form-signup" style="display:none;flex-direction:column;gap:10px;margin-top:14px">
+      <div style="display:flex;gap:8px">
+        <input id="auth-prenom" type="text" placeholder="Prénom *" autocomplete="given-name">
+        <input id="auth-nom" type="text" placeholder="Nom" autocomplete="family-name">
       </div>
-      <input id="auth-email-signup" type="email" placeholder="Adresse email *"
-        autocomplete="email"
-        style="width:100%;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-               background:#111;color:#fff;font-size:14px;margin-bottom:10px;box-sizing:border-box;
-               transition:border-color .15s;outline:none"
-        onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'">
-      <input id="auth-pw-signup" type="password" placeholder="Mot de passe (8 car. min) *"
-        autocomplete="new-password"
-        style="width:100%;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-               background:#111;color:#fff;font-size:14px;margin-bottom:10px;box-sizing:border-box;
-               transition:border-color .15s;outline:none"
-        onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'">
-      <input id="auth-pw-confirm" type="password" placeholder="Confirmer le mot de passe *"
-        autocomplete="new-password"
-        style="width:100%;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-               background:#111;color:#fff;font-size:14px;margin-bottom:16px;box-sizing:border-box;
-               transition:border-color .15s;outline:none"
-        onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'"
+      <input id="auth-email-signup" type="email" placeholder="Adresse email *" autocomplete="email">
+      <input id="auth-pw-signup" type="password" placeholder="Mot de passe (8 car. min) *" autocomplete="new-password">
+      <input id="auth-pw-confirm" type="password" placeholder="Confirmer le mot de passe *" autocomplete="new-password"
         onkeydown="if(event.key==='Enter')doSignup()">
-      <button id="auth-btn-signup" onclick="doSignup()"
-        style="width:100%;padding:12px;background:#01696f;color:#fff;border:none;
-               border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;
-               transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px">
-        Créer mon compte
-      </button>
-      <div style="position:relative;text-align:center;margin:16px 0">
-        <hr style="border:none;border-top:1px solid #333">
-        <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
-                     background:#1c1b19;padding:0 10px;color:#666;font-size:12px">ou</span>
-      </div>
-      <button onclick="doGoogleLogin()"
-        style="width:100%;padding:11px;background:#fff;color:#222;border:none;
-               border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
-               display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s"
-        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'">
-        <svg width="18" height="18" viewBox="0 0 48 48">
+      <button id="auth-btn-signup" onclick="doSignup()">Créer mon compte</button>
+      <div class="auth-sep"><span>ou</span></div>
+      <button class="auth-google-btn" onclick="doGoogleLogin()">
+        <svg width="16" height="16" viewBox="0 0 48 48">
           <path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 5.1 29.6 3 24 3 12.9 3 4 11.9 4 23s8.9 20 20 20c11 0 19.7-7.9 19.7-20 0-1.3-.1-2.7-.2-4z"/>
         </svg>
         Continuer avec Google
       </button>
     </div>
 
-    <!-- ===== VUE : EMAIL DE VÉRIFICATION ENVOYÉ ===== -->
-    <div id="auth-verify-sent" style="display:none;text-align:center;padding:8px 0">
-      <div style="font-size:40px;margin-bottom:16px">📬</div>
-      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:10px">
+    <!-- ── VUE : EMAIL ENVOYÉ ── -->
+    <div id="auth-verify-sent" style="display:none;text-align:center;padding:10px 0 4px">
+      <div style="font-size:38px;margin-bottom:14px">📬</div>
+      <div style="font-size:16px;font-weight:800;color:var(--text);font-family:var(--font);margin-bottom:8px">
         Vérifiez votre email
       </div>
-      <div id="auth-verify-email-addr" style="font-size:13px;color:#aaa;margin-bottom:16px;line-height:1.6">
+      <div style="font-size:13px;color:var(--text2);font-family:var(--font);line-height:1.7;margin-bottom:16px">
         Un lien de confirmation a été envoyé à<br>
-        <strong style="color:#4f98a3"></strong>.<br>
-        Cliquez sur le lien pour activer votre compte.
+        <strong id="auth-verify-addr" style="color:var(--blue)"></strong>.<br>
+        Cliquez sur ce lien pour activer votre compte.
       </div>
       <button onclick="resendVerification()"
-        style="background:none;border:1px solid #333;color:#aaa;padding:8px 18px;
-               border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:10px;transition:all .15s"
-        onmouseover="this.style.borderColor='#4f98a3';this.style.color='#4f98a3'"
-        onmouseout="this.style.borderColor='#333';this.style.color='#aaa'">
+        style="font-family:var(--font);font-size:13px;font-weight:600;padding:9px 18px;
+               background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);
+               border-radius:var(--radius);cursor:pointer;transition:all .15s;margin-bottom:10px">
         Renvoyer l'email
-      </button>
-      <div style="font-size:12px;color:#555;margin-top:8px">
-        Déjà confirmé ?
-        <button onclick="switchAuthTab('login')"
-          style="background:none;border:none;color:#4f98a3;font-size:12px;cursor:pointer;
-                 text-decoration:underline;padding:0">
-          Se connecter
-        </button>
-      </div>
+      </button><br>
+      <button class="auth-link-btn" onclick="switchAuthTab('login')">Déjà confirmé ? Se connecter</button>
     </div>
 
-    <!-- ===== VUE : MOT DE PASSE OUBLIÉ ===== -->
-    <div id="auth-forgot" style="display:none">
-      <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:8px">
+    <!-- ── VUE : MOT DE PASSE OUBLIÉ ── -->
+    <div id="auth-forgot" style="display:none;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;color:var(--text);font-family:var(--font);margin-bottom:6px">
         Réinitialiser le mot de passe
       </div>
-      <div style="font-size:13px;color:#888;margin-bottom:16px">
-        Entrez votre email, vous recevrez un lien de réinitialisation.
+      <div style="font-size:13px;color:var(--text2);font-family:var(--font);margin-bottom:14px;line-height:1.6">
+        Entrez votre email pour recevoir un lien de réinitialisation.
       </div>
-      <input id="auth-reset-email" type="email" placeholder="Adresse email"
-        style="width:100%;padding:11px 14px;border-radius:8px;border:1.5px solid #333;
-               background:#111;color:#fff;font-size:14px;margin-bottom:14px;box-sizing:border-box;
-               transition:border-color .15s;outline:none"
-        onfocus="this.style.borderColor='#01696f'" onblur="this.style.borderColor='#333'"
-        onkeydown="if(event.key==='Enter')doPasswordReset()">
-      <button onclick="doPasswordReset()"
-        style="width:100%;padding:12px;background:#01696f;color:#fff;border:none;
-               border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s">
-        Envoyer le lien
-      </button>
-      <button onclick="switchAuthTab('login')"
-        style="width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #333;
-               color:#888;border-radius:8px;font-size:14px;cursor:pointer;transition:all .15s"
-        onmouseover="this.style.borderColor='#555';this.style.color='#ccc'"
-        onmouseout="this.style.borderColor='#333';this.style.color='#888'">
-        ← Retour
-      </button>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input id="auth-reset-email" type="email" placeholder="Adresse email"
+          onkeydown="if(event.key==='Enter')doPasswordReset()">
+        <button onclick="doPasswordReset()" id="auth-btn-reset"
+          style="font-family:var(--font);font-size:14px;font-weight:700;
+                 background:var(--blue);color:#fff;border:none;border-radius:var(--radius);
+                 padding:11px;cursor:pointer;transition:all .15s">
+          Envoyer le lien
+        </button>
+        <button onclick="switchAuthTab('login')"
+          style="font-family:var(--font);font-size:13px;font-weight:600;padding:9px;
+                 background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);
+                 border-radius:var(--radius);cursor:pointer;transition:all .15s">
+          ← Retour à la connexion
+        </button>
+      </div>
     </div>
 
     <!-- Bouton fermer -->
     <button onclick="closeAuthModal()"
       style="position:absolute;top:14px;right:16px;background:none;border:none;
-             color:#666;font-size:20px;cursor:pointer;line-height:1;
+             color:var(--text3);font-size:20px;cursor:pointer;line-height:1;
              width:28px;height:28px;display:flex;align-items:center;justify-content:center;
-             border-radius:50%;transition:all .15s"
-      onmouseover="this.style.background='#2d2c2a';this.style.color='#fff'"
-      onmouseout="this.style.background='none';this.style.color='#666'">×</button>
+             border-radius:50%;font-family:var(--font);transition:all .15s"
+      onmouseover="this.style.background='var(--surface2)';this.style.color='var(--text)'"
+      onmouseout="this.style.background='none';this.style.color='var(--text3)'">×</button>
 
   </div>
 </div>
 
-<style>
-  #auth-msg.error { color:#f87171; background:rgba(248,113,113,.08); padding:8px 12px; border-radius:6px; }
-  #auth-msg.success { color:#4ade80; background:rgba(74,222,128,.08); padding:8px 12px; border-radius:6px; }
-  #auth-msg.info { color:#4f98a3; background:rgba(79,152,163,.08); padding:8px 12px; border-radius:6px; }
-  #auth-btn-login:hover, #auth-btn-signup:hover { background:#0c4e54; }
-  #auth-btn-login:disabled, #auth-btn-signup:disabled {
-    opacity:.55; cursor:not-allowed; pointer-events:none;
-  }
-</style>
-
 <script>
-// ============================================================
-//  INVESTIQ AUTH — RÉÉCRITURE COMPLÈTE
-//  Dépendances : sb (Supabase client), currentUser (global)
-// ============================================================
+// ════════════════════════════════════════════════════════════
+//  INVESTIQ — SYSTÈME AUTH COMPLET
+// ════════════════════════════════════════════════════════════
 
-let authLocked = false;   // bloque fermeture pendant les opérations critiques
-let _pendingSignupEmail = '';
+let _authLocked = false;
+let _pendingEmail = '';
 
-// ─── HELPERS MODAL ───────────────────────────────────────────
+// ── Helpers modale ───────────────────────────────────────────
+
 function openAuthModal(tab = 'login') {
   const ov = document.getElementById('auth-overlay');
   ov.style.display = 'flex';
@@ -5018,40 +5016,38 @@ function openAuthModal(tab = 'login') {
   setTimeout(() => {
     const el = document.getElementById(tab === 'signup' ? 'auth-prenom' : 'auth-email-login');
     if (el) el.focus();
-  }, 120);
+  }, 100);
 }
 
 function closeAuthModal() {
-  if (authLocked) return;
+  if (_authLocked) return;
   document.getElementById('auth-overlay').style.display = 'none';
   setAuthMsg('');
 }
 
-// Affiche l'une des vues dans la modale :
-// 'forms' | 'verify-sent' | 'forgot'
 function _showAuthView(view) {
-  document.getElementById('auth-tabs').style.display         = view === 'forms'       ? 'flex' : 'none';
-  document.getElementById('auth-form-login').style.display   = 'none';
-  document.getElementById('auth-form-signup').style.display  = 'none';
-  document.getElementById('auth-verify-sent').style.display  = view === 'verify-sent' ? 'block' : 'none';
-  document.getElementById('auth-forgot').style.display       = view === 'forgot'      ? 'block' : 'none';
-  document.getElementById('auth-msg').style.display          = view === 'verify-sent' ? 'none' : 'block';
+  document.getElementById('auth-tabs').style.display        = view === 'forms' ? 'flex' : 'none';
+  document.getElementById('auth-form-login').style.display  = 'none';
+  document.getElementById('auth-form-signup').style.display = 'none';
+  document.getElementById('auth-verify-sent').style.display = view === 'verify-sent' ? 'block' : 'none';
+  document.getElementById('auth-forgot').style.display      = view === 'forgot' ? 'block' : 'none';
+  const msgEl = document.getElementById('auth-msg');
+  if (msgEl) { msgEl.className = ''; msgEl.textContent = ''; }
 }
 
 function switchAuthTab(tab) {
   _showAuthView('forms');
-  document.getElementById('auth-form-login').style.display  = tab === 'login'  ? 'block' : 'none';
-  document.getElementById('auth-form-signup').style.display = tab === 'signup' ? 'block' : 'none';
-  const loginTab  = document.getElementById('tab-login');
-  const signupTab = document.getElementById('tab-signup');
-  if (loginTab)  { loginTab.style.borderBottomColor  = tab==='login'  ? '#01696f' : 'transparent'; loginTab.style.color  = tab==='login'  ? '#fff' : '#888'; }
-  if (signupTab) { signupTab.style.borderBottomColor = tab==='signup' ? '#01696f' : 'transparent'; signupTab.style.color = tab==='signup' ? '#fff' : '#888'; }
-  setAuthMsg('');
+  document.getElementById('auth-form-login').style.display  = tab === 'login'  ? 'flex' : 'none';
+  document.getElementById('auth-form-signup').style.display = tab === 'signup' ? 'flex' : 'none';
+  const tl = document.getElementById('tab-login');
+  const ts = document.getElementById('tab-signup');
+  if (tl) { tl.classList.toggle('active', tab === 'login'); }
+  if (ts) { ts.classList.toggle('active', tab === 'signup'); }
 }
 
 function showForgotPassword() {
-  _showAuthView('forgot');
   const email = document.getElementById('auth-email-login')?.value || '';
+  _showAuthView('forgot');
   const el = document.getElementById('auth-reset-email');
   if (el && email) el.value = email;
 }
@@ -5061,35 +5057,39 @@ function setAuthMsg(msg, type = 'error') {
   if (!el) return;
   el.textContent = msg;
   el.className = msg ? type : '';
+  if (msg) el.style.marginBottom = '12px';
+  else el.style.marginBottom = '0';
 }
 
-function setAuthLoading(btnId, loading) {
+function _setBtnLoading(btnId, loading) {
   const btn = document.getElementById(btnId);
   if (!btn) return;
   btn.disabled = loading;
-  const labels = { 'auth-btn-login': ['Se connecter', 'Connexion…'], 'auth-btn-signup': ['Créer mon compte', 'Création…'] };
-  btn.innerHTML = loading
-    ? `<span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0"></span>${labels[btnId]?.[1] || 'Chargement…'}`
-    : (labels[btnId]?.[0] || btn.textContent);
+  const labels = {
+    'auth-btn-login':  ['Se connecter',   'Connexion…'],
+    'auth-btn-signup': ['Créer mon compte','Création…'],
+    'auth-btn-reset':  ['Envoyer le lien', 'Envoi…']
+  };
+  if (labels[btnId]) {
+    btn.innerHTML = loading
+      ? `<span style="width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span>${labels[btnId][1]}`
+      : labels[btnId][0];
+  }
 }
 
-// ─── ACTIONS AUTH ────────────────────────────────────────────
+// ── Actions auth ─────────────────────────────────────────────
 
 async function doLogin() {
   const email = document.getElementById('auth-email-login')?.value.trim();
   const pw    = document.getElementById('auth-pw-login')?.value;
   if (!email || !pw) { setAuthMsg('Remplissez tous les champs.'); return; }
-  setAuthLoading('auth-btn-login', true);
+  _setBtnLoading('auth-btn-login', true);
   const { error } = await sb.auth.signInWithPassword({ email, password: pw });
-  setAuthLoading('auth-btn-login', false);
+  _setBtnLoading('auth-btn-login', false);
   if (error) {
-    if (error.message.includes('Invalid') || error.message.includes('invalid')) {
-      setAuthMsg('Email ou mot de passe incorrect.');
-    } else if (error.message.includes('confirm') || error.message.includes('verified')) {
-      setAuthMsg('Veuillez confirmer votre email avant de vous connecter.', 'info');
-    } else {
-      setAuthMsg(error.message);
-    }
+    if (/invalid|incorrect|wrong/i.test(error.message)) setAuthMsg('Email ou mot de passe incorrect.');
+    else if (/confirm|verif/i.test(error.message))       setAuthMsg('Confirmez votre email avant de vous connecter.', 'info');
+    else setAuthMsg(error.message);
   } else {
     closeAuthModal();
   }
@@ -5102,48 +5102,42 @@ async function doSignup() {
   const pw     = document.getElementById('auth-pw-signup')?.value;
   const pw2    = document.getElementById('auth-pw-confirm')?.value;
   if (!prenom || !email || !pw) { setAuthMsg('Remplissez les champs obligatoires (*).'); return; }
-  if (pw.length < 8)            { setAuthMsg('Le mot de passe doit contenir au moins 8 caractères.'); return; }
-  if (pw !== pw2)                { setAuthMsg('Les mots de passe ne correspondent pas.'); return; }
-  setAuthLoading('auth-btn-signup', true);
+  if (pw.length < 8)             { setAuthMsg('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+  if (pw !== pw2)                 { setAuthMsg('Les mots de passe ne correspondent pas.'); return; }
+  _setBtnLoading('auth-btn-signup', true);
   const { error } = await sb.auth.signUp({
     email, password: pw,
     options: { data: { prenom, nom, full_name: [prenom, nom].filter(Boolean).join(' ') } }
   });
-  setAuthLoading('auth-btn-signup', false);
+  _setBtnLoading('auth-btn-signup', false);
   if (error) {
-    if (error.message.includes('already')) {
-      setAuthMsg('Un compte existe déjà avec cet email.', 'info');
-    } else {
-      setAuthMsg(error.message);
-    }
+    if (/already/.test(error.message)) setAuthMsg('Un compte existe déjà avec cet email.', 'info');
+    else setAuthMsg(error.message);
   } else {
-    // Afficher la vue "vérification envoyée"
-    _pendingSignupEmail = email;
+    _pendingEmail = email;
     _showAuthView('verify-sent');
-    const addr = document.querySelector('#auth-verify-email-addr strong');
+    const addr = document.getElementById('auth-verify-addr');
     if (addr) addr.textContent = email;
   }
 }
 
 async function resendVerification() {
-  if (!_pendingSignupEmail) { setAuthMsg('Email introuvable.', 'info'); return; }
-  const { error } = await sb.auth.resend({ type: 'signup', email: _pendingSignupEmail });
-  if (error) { setAuthMsg(error.message); }
-  else       { setAuthMsg('Email renvoyé !', 'success'); }
+  if (!_pendingEmail) return;
+  const { error } = await sb.auth.resend({ type: 'signup', email: _pendingEmail });
+  if (error) setAuthMsg(error.message);
+  else       setAuthMsg('Email renvoyé !', 'success');
 }
 
 async function doPasswordReset() {
   const email = document.getElementById('auth-reset-email')?.value.trim();
   if (!email) { setAuthMsg('Entrez votre adresse email.'); return; }
-  const btn = document.getElementById('auth-forgot')?.querySelector('button');
-  if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+  _setBtnLoading('auth-btn-reset', true);
   const { error } = await sb.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.href.split('?')[0] + '?reset=true'
+    redirectTo: window.location.href.split('?')[0] + '?reset=1'
   });
-  if (btn) { btn.disabled = false; btn.textContent = 'Envoyer le lien'; }
-  if (error) {
-    setAuthMsg(error.message);
-  } else {
+  _setBtnLoading('auth-btn-reset', false);
+  if (error) setAuthMsg(error.message);
+  else {
     setAuthMsg('Email envoyé ! Vérifiez votre boîte.', 'success');
     setTimeout(() => switchAuthTab('login'), 3000);
   }
@@ -5154,130 +5148,91 @@ async function doGoogleLogin() {
     provider: 'google',
     options: { redirectTo: window.location.href.split('?')[0] }
   });
-  if (error) setAuthMsg('Impossible de lancer Google : ' + error.message);
+  if (error) setAuthMsg('Erreur Google : ' + error.message);
 }
 
 async function doLogout() {
   await sb.auth.signOut();
   currentUser = null;
-  // Ferme le panel profil
   if (typeof closePanel === 'function') closePanel();
   updateAuthUI();
-  // Feedback
-  const t = document.getElementById('share-toast');
-  if (t) { t.textContent = 'Déconnecté.'; t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); t.textContent = 'Lien copié !'; }, 2000); }
+  _showToast('Déconnecté');
 }
 
-// ─── UI selon état auth ──────────────────────────────────────
+function _showToast(msg) {
+  const t = document.getElementById('share-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => { t.classList.remove('show'); t.textContent = 'Lien copié !'; }, 2500);
+}
+
+// ── UI selon état auth ────────────────────────────────────────
 
 function updateAuthUI() {
   const loggedIn = !!currentUser;
 
-  // Bouton "Connexion" dans la topbar
-  let loginBtn = document.getElementById('trb-btn-login');
-  if (!loginBtn) {
-    loginBtn = document.createElement('button');
-    loginBtn.id = 'trb-btn-login';
-    loginBtn.style.cssText = 'padding:6px 16px;background:#01696f;color:#fff;border:none;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s';
-    loginBtn.onmouseenter = () => loginBtn.style.background = '#0c4e54';
-    loginBtn.onmouseleave = () => loginBtn.style.background = '#01696f';
-    loginBtn.onclick = () => openAuthModal('login');
-    const trb = document.getElementById('top-right-btns');
-    if (trb) trb.prepend(loginBtn);
-  }
-  loginBtn.textContent  = 'Connexion';
-  loginBtn.style.display = loggedIn ? 'none' : 'flex';
+  // Bouton Connexion (déjà dans le HTML statique)
+  const loginBtn = document.getElementById('trb-btn-login');
+  if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : 'flex';
 
-  // Badge cloud dans le profil
-  const badge = document.getElementById('profile-cloud-badge');
-  if (badge) badge.style.display = loggedIn ? 'flex' : 'none';
-
-  // Bouton déconnexion dans le panel profil
-  _upsertLogoutButton(loggedIn);
-
-  // Info utilisateur dans le profil
-  if (loggedIn) {
+  // Bouton profil : mettre à jour avatar et label
+  if (loggedIn && currentUser) {
     const meta   = currentUser.user_metadata || {};
-    const prenom = meta.prenom || meta.given_name || (meta.full_name||'').split(' ')[0] || '';
-    const nom    = meta.nom    || meta.family_name|| (meta.full_name||'').split(' ').slice(1).join(' ') || '';
+    const prenom = meta.prenom || meta.given_name  || (meta.full_name || '').split(' ')[0] || '';
+    const nom    = meta.nom    || meta.family_name || (meta.full_name || '').split(' ').slice(1).join(' ') || '';
     const email  = currentUser.email || '';
     const initials = ([prenom[0], nom[0]].filter(Boolean).join('') || email[0] || '?').toUpperCase();
-    const displayName = [prenom, nom].filter(Boolean).join(' ') || 'Mon compte';
 
-    ['profile-av-sm','profile-av-lg','trb-av'].forEach(id => {
+    ['trb-av', 'profile-av-sm', 'profile-av-lg'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = initials;
     });
-    ['profile-btn-label','trb-label'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = prenom || 'Mon compte';
-    });
-    const dn = document.getElementById('profile-display-name');
-    if (dn) dn.textContent = displayName;
-    const de = document.getElementById('profile-display-email');
-    if (de) de.textContent = email || 'Renseignez votre profil';
+    const trbLabel = document.getElementById('trb-label');
+    if (trbLabel) trbLabel.textContent = prenom || 'Mon compte';
 
-    // Pré-remplir les champs du formulaire profil
+    const dn = document.getElementById('profile-display-name');
+    if (dn) dn.textContent = [prenom, nom].filter(Boolean).join(' ') || 'Mon compte';
+    const de = document.getElementById('profile-display-email');
+    if (de) de.textContent = email || 'Compte connecté';
+
+    // Préremplir champs profil
     [['profile-prenom', prenom], ['profile-nom', nom], ['profile-email', email]].forEach(([id, val]) => {
       const el = document.getElementById(id);
-      if (el && !el.value) el.value = val;
+      if (el && !el.value && val) el.value = val;
     });
+
+    // Infos connexion dans le footer du panel profil
+    const info = document.getElementById('profile-connected-info');
+    if (info) info.style.display = 'flex';
+    const emailEl = document.getElementById('profile-connected-email');
+    if (emailEl) emailEl.textContent = email;
   } else {
-    // Logged out → reset visuels
-    ['profile-av-sm','profile-av-lg','trb-av'].forEach(id => {
+    // Réinitialiser
+    ['trb-av', 'profile-av-sm', 'profile-av-lg'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = '?';
     });
-    ['profile-btn-label','trb-label'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = 'Mon compte';
-    });
+    const trbLabel = document.getElementById('trb-label');
+    if (trbLabel) trbLabel.textContent = 'Mon compte';
     const dn = document.getElementById('profile-display-name');
     if (dn) dn.textContent = 'Non connecté';
     const de = document.getElementById('profile-display-email');
     if (de) de.textContent = 'Connectez-vous pour synchroniser vos analyses';
+    const info = document.getElementById('profile-connected-info');
+    if (info) info.style.display = 'none';
   }
+
+  // Bouton déconnexion dans le footer du panel profil
+  const logoutBtn = document.getElementById('profile-logout-btn');
+  if (logoutBtn) logoutBtn.style.display = loggedIn ? 'flex' : 'none';
+
+  // Badge cloud
+  const badge = document.getElementById('profile-cloud-badge');
+  if (badge) badge.style.display = loggedIn ? 'flex' : 'none';
 }
 
-function _upsertLogoutButton(loggedIn) {
-  // Cherche le panel profil (deux IDs possibles selon version du code)
-  const pp = document.getElementById('profile-panel') || document.getElementById('panel-profile');
-  if (!pp) return;
-
-  let logoutRow = document.getElementById('profile-logout-row');
-  if (!logoutRow) {
-    logoutRow = document.createElement('div');
-    logoutRow.id = 'profile-logout-row';
-    logoutRow.style.cssText = 'margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)';
-
-    // Ligne "connecté en tant que" + bouton déco
-    logoutRow.innerHTML = `
-      <div id="profile-connected-as"
-        style="font-size:12px;color:#666;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-        <span style="width:7px;height:7px;border-radius:50%;background:#4ade80;flex-shrink:0"></span>
-        <span id="profile-connected-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      </div>
-      <button onclick="doLogout()"
-        style="width:100%;padding:10px;background:rgba(248,113,113,.1);color:#f87171;
-               border:1px solid rgba(248,113,113,.25);border-radius:8px;font-size:14px;
-               font-weight:600;cursor:pointer;transition:all .15s"
-        onmouseover="this.style.background='rgba(248,113,113,.2)'"
-        onmouseout="this.style.background='rgba(248,113,113,.1)'">
-        Se déconnecter
-      </button>
-    `;
-    pp.appendChild(logoutRow);
-  }
-
-  logoutRow.style.display = loggedIn ? 'block' : 'none';
-
-  if (loggedIn && currentUser) {
-    const emailEl = document.getElementById('profile-connected-email');
-    if (emailEl) emailEl.textContent = currentUser.email || '';
-  }
-}
-
-// ─── CLOUD SYNC ──────────────────────────────────────────────
+// ── Cloud sync ────────────────────────────────────────────────
 
 async function syncCloudAnalyses() {
   if (!currentUser) return;
@@ -5288,295 +5243,46 @@ async function syncCloudAnalyses() {
     .limit(50);
   if (error) { console.warn('Cloud sync:', error.message); return; }
   if (!data?.length) return;
-
-  const local = loadHistory();
-  const cloudIds = new Set(data.map(d => d.id));
-  const merged = [
-    ...data.map(d => ({
-      id: d.id, name: d.nom,
-      date: d.datecreation ? new Date(d.datecreation).toLocaleDateString('fr-FR') : '',
-      prix: d.resultats?.prix ?? d.params?.prix ?? 0,
-      ville: d.resultats?.ville ?? d.params?.ville ?? '',
-      tri: d.resultats?.tri ?? null,
-      cfM1: d.resultats?.cfM1 ?? 0,
-      rendBrut: d.resultats?.rendBrut ?? 0,
-      verdict: d.resultats?.verdict ?? '',
-      verdictIcon: d.resultats?.verdictIcon ?? '',
-      params: d.params,
-      synced: true
-    })),
-    ...local.filter(e => !cloudIds.has(e.id))
-  ];
-  saveHistory(merged.slice(0, 50));
-  if (typeof renderHistory  === 'function') renderHistory();
-  if (typeof renderPortfolio === 'function') renderPortfolio();
-}
-
-// ─── OVERRIDE saveCurrentAnalysis ────────────────────────────
-const _origSaveCurrentAnalysis = window.saveCurrentAnalysis;
-window.saveCurrentAnalysis = async function() {
-  if (!window.R) { alert('Lancez d\'abord une analyse.'); return; }
-  const defaultName = window.R.i?.ville
-    ? `${window.R.i.ville} ${typeof Fe === 'function' ? Fe(window.R.i.prix) : window.R.i.prix}`
-    : (typeof Fe === 'function' ? Fe(window.R.i.prix) : window.R.i.prix);
-  const name = prompt('Nom de cette analyse :', defaultName);
-  if (!name) return;
-
-  const hist  = loadHistory();
-  const entry = {
-    id: Date.now(), name,
-    date: new Date().toLocaleDateString('fr-FR'),
-    prix: window.R.i.prix,
-    ville: window.R.i.ville ?? '',
-    tri:  window.R.tri,
-    cfM1: window.R.cfM1,
-    rendBrut: window.R.rendBrut,
-    verdict: typeof getDecision === 'function' ? getDecision(window.R).label : '',
-    verdictIcon: typeof getDecision === 'function' ? getDecision(window.R).icon : '',
-    params: JSON.parse(JSON.stringify(window.R.i))
-  };
-  hist.unshift(entry);
-  if (hist.length > 50) hist.pop();
-  saveHistory(hist);
-
-  const t = document.getElementById('share-toast');
-  if (t) { t.textContent = 'Analyse sauvegardée ✓'; t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); t.textContent = 'Lien copié !'; }, 2500); }
-
-  if (typeof renderHistory  === 'function') renderHistory();
-  if (typeof renderPortfolio === 'function') renderPortfolio();
-
-  // Push Supabase
-  if (currentUser) {
-    const row = {
-      userid: currentUser.id,
-      nom: name,
-      datecreation: new Date().toISOString(),
-      params: JSON.parse(JSON.stringify(window.R.i)),
-      resultats: { prix: window.R.i.prix, ville: window.R.i.ville, tri: window.R.tri, cfM1: window.R.cfM1, rendBrut: window.R.rendBrut, verdict: entry.verdict, verdictIcon: entry.verdictIcon }
-    };
-    const { error } = await sb.from('analyses').insert(row);
-    if (!error) {
-      if (t) { t.textContent = 'Sauvegardé dans le cloud ☁️'; t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); t.textContent = 'Lien copié !'; }, 2500); }
-    } else {
-      console.warn('Cloud save:', error.message);
-    }
-  } else {
-    // Pas connecté → invite discrète après 1.2s
-    setTimeout(() => openAuthModal('signup'), 1200);
-  }
-};
-
-// ─── OVERRIDE deleteHistEntry ─────────────────────────────────
-window.deleteHistEntry = async function(id) {
-  const hist = loadHistory().filter(e => e.id !== id);
-  saveHistory(hist);
-  if (typeof renderHistory  === 'function') renderHistory();
-  if (typeof renderPortfolio === 'function') renderPortfolio();
-  // Supprime aussi côté Supabase (seulement si l'id est un UUID string)
-  if (currentUser && typeof id === 'string') {
-    await sb.from('analyses').delete().eq('id', id).eq('userid', currentUser.id);
-  }
-};
-
-// ─── GESTION RETOUR OAUTH / MAGIC LINK ───────────────────────
-// Supabase met le token dans le hash #access_token=... après OAuth
-(function handleAuthRedirect() {
-  const hash = window.location.hash;
-  if (hash.includes('access_token') || hash.includes('type=recovery')) {
-    // Supabase JS gère automatiquement via onAuthStateChange
-    // On nettoie juste l'URL pour ne pas exposer le token
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
-  }
-  // Paramètre reset=true dans l'URL → modale reset
-  if (window.location.search.includes('reset=true')) {
-    const urlClean = window.location.pathname;
-    window.history.replaceState(null, '', urlClean);
-    // La session sera détectée par onAuthStateChange avec event='PASSWORD_RECOVERY'
-  }
-})();
-
-// ─── LISTENER AUTH STATE ─────────────────────────────────────
-sb.auth.onAuthStateChange(async (event, session) => {
-  currentUser = session?.user ?? null;
-  updateAuthUI();
-
-  if (event === 'PASSWORD_RECOVERY') {
-    // L'utilisateur a cliqué sur le lien de reset dans son email
-    const newPw = prompt('Entrez votre nouveau mot de passe (8 caractères min.) :');
-    if (newPw && newPw.length >= 8) {
-      const { error } = await sb.auth.updateUser({ password: newPw });
-      if (error) { alert('Erreur : ' + error.message); }
-      else        { alert('Mot de passe mis à jour avec succès !'); closeAuthModal(); }
-    }
-    return;
-  }
-
-  if (currentUser) {
-    await syncCloudAnalyses();
-  }
-});
-
-// Keyboard Enter dans les formulaires
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const ov = document.getElementById('auth-overlay');
-  if (!ov || ov.style.display === 'none') return;
-  if (document.getElementById('auth-form-login')?.style.display !== 'none') doLogin();
-  else if (document.getElementById('auth-form-signup')?.style.display !== 'none') doSignup();
-});
-</script>
-// ═══════════════════════════════════════════════════
-//  INVESTIQ — AUTH & CLOUD SYNC (Supabase)
-//  Table: analyses (id uuid, user_id, nom, date_creation, params jsonb, resultats jsonb)
-// ═══════════════════════════════════════════════════
-
-// ── Modal helpers ────────────────────────────────
-function openAuthModal(tab='login') {
-  const ov = document.getElementById('auth-overlay');
-  ov.style.display = 'flex';
-  switchAuthTab(tab);
-  setTimeout(() => {
-    const el = document.getElementById(tab==='signup' ? 'auth-prenom' : 'auth-email-login');
-    if(el) el.focus();
-  }, 150);
-}
-function closeAuthModal() {
-  document.getElementById('auth-overlay').style.display = 'none';
-}
-function switchAuthTab(tab) {
-  document.getElementById('auth-form-login').style.display  = tab==='login'  ? 'block' : 'none';
-  document.getElementById('auth-form-signup').style.display = tab==='signup' ? 'block' : 'none';
-  document.getElementById('tab-login').style.borderBottomColor  = tab==='login'  ? '#01696f' : 'transparent';
-  document.getElementById('tab-signup').style.borderBottomColor = tab==='signup' ? '#01696f' : 'transparent';
-  document.getElementById('tab-login').style.color  = tab==='login'  ? '#fff' : '#888';
-  document.getElementById('tab-signup').style.color = tab==='signup' ? '#fff' : '#888';
-  setAuthMsg('');
-}
-function setAuthMsg(msg, type='error') {
-  const el = document.getElementById('auth-msg');
-  el.textContent = msg;
-  el.className = 'auth-msg' + (type ? ' ' + type : '');
-}
-function setAuthLoading(btnId, loading) {
-  const btn = document.getElementById(btnId);
-  if(!btn) return;
-  btn.disabled = loading;
-  btn.textContent = loading ? 'Chargement…' : (btnId==='auth-btn-login' ? 'Se connecter' : 'Créer mon compte');
-}
-
-// ── Auth actions ─────────────────────────────────
-async function doLogin() {
-  const email = document.getElementById('auth-email-login').value.trim();
-  const pw    = document.getElementById('auth-pw-login').value;
-  if(!email || !pw) { setAuthMsg('Remplissez tous les champs.'); return; }
-  setAuthLoading('auth-btn-login', true);
-  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
-  setAuthLoading('auth-btn-login', false);
-  if(error) setAuthMsg(error.message.includes('Invalid') ? 'Email ou mot de passe incorrect.' : error.message);
-  else closeAuthModal();
-}
-async function doSignup() {
-  const prenom = document.getElementById('auth-prenom').value.trim();
-  const nom    = document.getElementById('auth-nom').value.trim();
-  const email  = document.getElementById('auth-email-signup').value.trim();
-  const pw     = document.getElementById('auth-pw-signup').value;
-  if(!email || !pw || !prenom) { setAuthMsg('Remplissez tous les champs obligatoires.'); return; }
-  if(pw.length < 8) { setAuthMsg('Le mot de passe doit contenir au moins 8 caractères.'); return; }
-  setAuthLoading('auth-btn-signup', true);
-  const { error } = await sb.auth.signUp({ email, password: pw, options: { data: { prenom, nom, full_name: prenom+' '+nom } } });
-  setAuthLoading('auth-btn-signup', false);
-  if(error) setAuthMsg(error.message);
-  else setAuthMsg('Compte créé ! Vérifiez votre email pour confirmer.', 'success');
-}
-async function doGoogleLogin() {
-  await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
-}
-async function doLogout() {
-  await sb.auth.signOut();
-  closeProfile && closeProfile();
-}
-
-// ── UI state based on auth ───────────────────────
-function updateAuthUI() {
-  const loggedIn = !!currentUser;
-  // Login button in top bar
-  let loginBtn = document.getElementById('trb-btn-login');
-  if(!loginBtn) {
-    loginBtn = document.createElement('button');
-    loginBtn.id = 'trb-btn-login';
-    loginBtn.textContent = 'Connexion';
-    loginBtn.style.cssText = 'padding:6px 16px;background:#01696f;color:#fff;border:none;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;';
-    loginBtn.onclick = () => openAuthModal('login');
-    const trb = document.getElementById('top-right-btns');
-    if(trb) trb.prepend(loginBtn);
-  }
-  loginBtn.style.display = loggedIn ? 'none' : 'flex';
-  // Logout row in profile panel
-  let logoutRow = document.getElementById('profile-logout-row');
-  if(!logoutRow) {
-    logoutRow = document.createElement('div');
-    logoutRow.id = 'profile-logout-row';
-    logoutRow.style.cssText = 'margin-top:16px;';
-    logoutRow.innerHTML = '<button onclick="doLogout()" style="width:100%;padding:10px;background:#3b0000;color:#f87171;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Se déconnecter</button>';
-    const pp = document.getElementById('profile-panel') || document.getElementById('panel-profile');
-    if(pp) pp.appendChild(logoutRow);
-  }
-  logoutRow.style.display = loggedIn ? 'block' : 'none';
-  // Cloud badge
-  let badge = document.getElementById('profile-cloud-badge');
-  if(badge) badge.style.display = loggedIn ? 'flex' : 'none';
-}
-
-// ── Cloud sync ───────────────────────────────────
-async function syncCloudAnalyses() {
-  if(!currentUser) return;
-  const { data, error } = await sb.from('analyses')
-    .select('*')
-    .eq('user_id', currentUser.id)
-    .order('date_creation', { ascending: false })
-    .limit(50);
-  if(error) { console.warn('Cloud sync:', error.message); return; }
-  if(!data?.length) return;
   const local    = loadHistory();
   const cloudIds = new Set(data.map(d => d.id));
   const merged   = [
     ...data.map(d => ({
       id:          d.id,
       name:        d.nom,
-      date:        d.date_creation ? new Date(d.date_creation).toLocaleDateString('fr-FR') : '',
-      prix:        d.resultats?.prix   || d.params?.prix   || 0,
-      ville:       d.resultats?.ville  || d.params?.ville  || '',
-      tri:         d.resultats?.tri    ?? null,
-      cfM1:        d.resultats?.cfM1   ?? 0,
-      rendBrut:    d.resultats?.rendBrut ?? 0,
-      verdict:     d.resultats?.verdict     || '',
-      verdictIcon: d.resultats?.verdictIcon || '',
-      params:      d.params || {},
+      date:        d.datecreation ? new Date(d.datecreation).toLocaleDateString('fr-FR') : '',
+      prix:        d.resultats?.prix        ?? d.params?.prix        ?? 0,
+      ville:       d.resultats?.ville       ?? d.params?.ville       ?? '',
+      tri:         d.resultats?.tri         ?? null,
+      cfM1:        d.resultats?.cfM1        ?? 0,
+      rendBrut:    d.resultats?.rendBrut    ?? 0,
+      verdict:     d.resultats?.verdict     ?? '',
+      verdictIcon: d.resultats?.verdictIcon ?? '',
+      params:      d.params ?? {},
       synced:      true
     })),
     ...local.filter(e => !cloudIds.has(e.id))
   ];
   saveHistory(merged.slice(0, 50));
-  if(typeof renderHistory  === 'function') renderHistory();
-  if(typeof renderPortfolio=== 'function') renderPortfolio();
+  if (typeof renderHistory   === 'function') renderHistory();
+  if (typeof renderPortfolio === 'function') renderPortfolio();
 }
 
-// ── Override save to push to cloud ───────────────
+// ── Override saveCurrentAnalysis → push cloud ─────────────────
+
 const _origSave = window.saveCurrentAnalysis;
 window.saveCurrentAnalysis = async function() {
-  if(!window.R) { alert('Lancez d'abord une analyse.'); return; }
-  const defaultName = (R.i.ville ? R.i.ville + ' — ' : '') + (typeof Fe === 'function' ? Fe(R.i.prix) : R.i.prix);
+  if (!window.R) { alert("Lancez d'abord une analyse."); return; }
+  const defaultName = (R.i.ville ? R.i.ville + ' \u2014 ' : '') +
+    (typeof Fe === 'function' ? Fe(R.i.prix) : R.i.prix);
   const name = prompt('Nom de cette analyse :', defaultName);
-  if(!name) return;
+  if (!name) return;
   const hist  = loadHistory();
   const entry = {
     id:          Date.now(),
     name,
     date:        new Date().toLocaleDateString('fr-FR'),
     prix:        R.i.prix,
-    ville:       R.i.ville || '',
+    ville:       R.i.ville ?? '',
     tri:         R.tri,
     cfM1:        R.cfM1,
     rendBrut:    R.rendBrut,
@@ -5585,82 +5291,80 @@ window.saveCurrentAnalysis = async function() {
     params:      JSON.parse(JSON.stringify(R.i))
   };
   hist.unshift(entry);
-  if(hist.length > 50) hist.pop();
+  if (hist.length > 50) hist.pop();
   saveHistory(hist);
-  if(typeof renderHistory === 'function') renderHistory();
-  // Toast local
-  const t = document.getElementById('share-toast');
-  if(t) { t.textContent = '💾 Analyse sauvegardée !'; t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); t.textContent = '🔗 Lien copié !'; }, 2500); }
-  // Push cloud
-  if(currentUser) {
+  if (typeof renderHistory === 'function') renderHistory();
+  _showToast('Analyse sauvegardée \u2713');
+  if (currentUser) {
     const row = {
-      user_id:       currentUser.id,
+      userid:       currentUser.id,
       nom:           name,
-      date_creation: new Date().toISOString(),
-      params:        JSON.parse(JSON.stringify(R.i)),
+      datecreation: new Date().toISOString(),
+      params:       JSON.parse(JSON.stringify(R.i)),
       resultats: {
-        prix:        R.i.prix,
-        ville:       R.i.ville || '',
-        tri:         R.tri,
-        cfM1:        R.cfM1,
-        rendBrut:    R.rendBrut,
-        verdict:     entry.verdict,
-        verdictIcon: entry.verdictIcon
+        prix: R.i.prix, ville: R.i.ville ?? '',
+        tri: R.tri, cfM1: R.cfM1, rendBrut: R.rendBrut,
+        verdict: entry.verdict, verdictIcon: entry.verdictIcon
       }
     };
     const { error } = await sb.from('analyses').insert(row);
-    if(error) console.warn('Cloud save:', error.message);
-    else {
-      const t2 = document.getElementById('share-toast');
-      if(t2) { t2.textContent = '☁️ Sauvegardé dans le cloud !'; t2.classList.add('show'); setTimeout(() => { t2.classList.remove('show'); t2.textContent = '🔗 Lien copié !'; }, 2500); }
+    if (!error) {
+      _showToast('Sauvegard\u00e9 dans le cloud \u2601\ufe0f');
       syncCloudAnalyses();
+    } else {
+      console.warn('Cloud save:', error.message);
     }
   } else {
     setTimeout(() => openAuthModal('signup'), 1200);
   }
 };
 
-// ── Override delete to remove from cloud ─────────
-const _origDelete = window.deleteHistEntry;
+// ── Override deleteHistEntry → supprime dans le cloud ─────────
+
 window.deleteHistEntry = async function(id) {
   const hist = loadHistory().filter(e => e.id !== id);
   saveHistory(hist);
-  if(typeof renderHistory   === 'function') renderHistory();
-  if(typeof renderPortfolio === 'function') renderPortfolio();
-  // Delete from cloud only if UUID (string = came from Supabase)
-  if(currentUser && typeof id === 'string') {
-    await sb.from('analyses').delete().eq('id', id).eq('user_id', currentUser.id);
+  if (typeof renderHistory   === 'function') renderHistory();
+  if (typeof renderPortfolio === 'function') renderPortfolio();
+  if (currentUser && typeof id === 'string') {
+    await sb.from('analyses').delete().eq('id', id).eq('userid', currentUser.id);
   }
 };
 
-// ── Auth state listener (runs on load + on change) 
+// ── Gestion retour OAuth / magic link ────────────────────────
+
+(function handleRedirect() {
+  if (window.location.hash.includes('access_token')) {
+    if (window.history?.replaceState)
+      window.history.replaceState(null, '', window.location.pathname);
+  }
+})();
+
+// ── Auth state listener ───────────────────────────────────────
+
 sb.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user ?? null;
   updateAuthUI();
-  if(currentUser) {
-    // Pre-fill profile fields from metadata
-    const meta = currentUser.user_metadata || {};
-    const prenom = meta.prenom || meta.given_name || (meta.full_name||'').split(' ')[0] || '';
-    const nom    = meta.nom    || meta.family_name|| (meta.full_name||'').split(' ').slice(1).join(' ') || '';
-    const email  = currentUser.email || '';
-    [['profile-prenom', prenom], ['profile-nom', nom], ['profile-email', email]].forEach(([id, val]) => {
-      const el = document.getElementById(id);
-      if(el && !el.value) el.value = val;
-    });
-    if(typeof updateProfileUI === 'function') updateProfileUI();
-    await syncCloudAnalyses();
+  if (event === 'PASSWORD_RECOVERY') {
+    const newPw = prompt('Entrez votre nouveau mot de passe (8 caractères min.) :');
+    if (newPw && newPw.length >= 8) {
+      const { error } = await sb.auth.updateUser({ password: newPw });
+      if (error) alert('Erreur : ' + error.message);
+      else       { alert('Mot de passe mis à jour !'); closeAuthModal(); }
+    }
+    return;
   }
+  if (currentUser) await syncCloudAnalyses();
 });
 
-// ── Keyboard shortcut Enter in auth forms ────────
+// Raccourci clavier Entrée dans les formulaires
 document.addEventListener('keydown', e => {
-  if(e.key !== 'Enter') return;
+  if (e.key !== 'Enter') return;
   const ov = document.getElementById('auth-overlay');
-  if(!ov || ov.style.display === 'none') return;
-  const loginVisible = document.getElementById('auth-form-login')?.style.display !== 'none';
-  loginVisible ? doLogin() : doSignup();
+  if (!ov || ov.style.display === 'none') return;
+  if (document.getElementById('auth-form-login')?.style.display !== 'none')  doLogin();
+  else if (document.getElementById('auth-form-signup')?.style.display !== 'none') doSignup();
 });
 </script>
-
 </body>
 </html>
