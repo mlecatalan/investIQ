@@ -1216,7 +1216,7 @@ input[type=range]{width:100%;height:5px;border-radius:10px;outline:none;cursor:p
 </div>
 
 
-<button class="fab-ai" id="fab-ai" onclick="togglePanel('ai')" title="Assistant IA">
+<button class="fab-ai" id="fab-ai" onclick="if(!requirePro('ia'))return;togglePanel('ai')"
   <span class="fab-ai-icon">🤖</span>
   <span class="fab-ai-label">Assistant IA</span>
 </button>
@@ -4442,6 +4442,7 @@ function estimerLoyer(){
 }
 
 function runAnalysis(isShared){
+  if (!isShared && typeof canRunAnalysis === 'function' && !canRunAnalysis()) return;
   const inp=getInp();
   if(!inp.prix||!inp.loyer||!inp.apport){alert('Renseignez au minimum : Prix d\'achat, Loyer mensuel et Apport.');return;}
   R=compute(inp);
@@ -4473,6 +4474,7 @@ function runAnalysis(isShared){
 }
 function shareAnalysis(){
   if(!R){alert('Lancez d\'abord une analyse.');return;}
+  if (typeof canSaveAnalysis === 'function' && !canSaveAnalysis()) return;
   const i=R.i;
   const p=new URLSearchParams({prix:i.prix,notaire:i.fraisNotaire,apport:i.apport,taux:i.taux,duree:i.dureeCredit,loyer:i.loyer,vacance:i.vacance,horizon:i.horizon,revalo:i.revaloCapital,travaux:i.travaux,copro:i.copro,tf:i.taxeFonciere,gestion:i.gestion,pno:i.assurancePNO,entretien:i.entretien,ville:i.ville||'',type:i.typeBien||'',surf:i.surfaceHab||0,shared:1});
   const url=window.location.origin+window.location.pathname+'?'+p.toString();
@@ -5436,14 +5438,20 @@ async function initProStatus() {
 function updateProUI() {
   // Badge PRO dans le bouton connexion si pro
   const loginBtn = document.getElementById('trb-btn-login');
-  if (loginBtn && _isPro) {
+  if (loginBtn && isPro) {
     loginBtn.innerHTML = '⭐ PRO';
     loginBtn.style.background = 'linear-gradient(135deg,#7c3aed,#4f46e5)';
-  }
+  }  //
+
+  // Masquer badges PRO sur les onglets si utilisateur pro
+  document.querySelectorAll('.float-nav-btn .pro-badge').forEach(el => {
+    el.style.display = isPro ? 'none' : '';
+  });
+
   // Compteur analyses gratuites
   renderFreeCounter();
 }
-
+  
 // ═══ COMPTEUR ANALYSES GRATUITES ═══
 function getFreeAnalysisCount() {
   return parseInt(localStorage.getItem('iq_free_count') || '0');
