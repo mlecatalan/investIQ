@@ -5384,5 +5384,145 @@ document.addEventListener('keydown', e => {
   else if (document.getElementById('auth-form-signup')?.style.display !== 'none') doSignup();
 });
 </script>
+<!-- ═══ MODAL UPGRADE STRIPE ═══ -->
+<div class="upgrade-overlay" id="upgrade-overlay" onclick="if(event.target===this)closeUpgrade()">
+  <div class="upgrade-modal">
+    <div class="upgrade-hero">
+      <div class="upgrade-hero-icon">💎</div>
+      <div class="upgrade-hero-title">Passez à InvestIQ Pro</div>
+      <div class="upgrade-hero-sub">Débloquez toutes les fonctionnalités pour analyser sans limite</div>
+    </div>
+    <div class="upgrade-body">
+      <div class="upgrade-features">
+        <div class="upgrade-feat"><span class="upgrade-feat-icon">∞</span><div class="upgrade-feat-text">Analyses illimitées<span>Sauvegardez autant de biens que vous voulez</span></div></div>
+        <div class="upgrade-feat"><span class="upgrade-feat-icon">🤖</span><div class="upgrade-feat-text">Assistant IA inclus<span>Posez toutes vos questions sur vos investissements</span></div></div>
+        <div class="upgrade-feat"><span class="upgrade-feat-icon">📄</span><div class="upgrade-feat-text">Export PDF<span>Rapport complet prêt à partager</span></div></div>
+        <div class="upgrade-feat"><span class="upgrade-feat-icon">⚖️</span><div class="upgrade-feat-text">Comparateur de biens<span>Comparez jusqu'à 3 investissements côte à côte</span></div></div>
+        <div class="upgrade-feat"><span class="upgrade-feat-icon">💼</span><div class="upgrade-feat-text">Portefeuille<span>Suivi global de tous vos investissements</span></div></div>
+        <div class="upgrade-feat"><span class="upgrade-feat-icon">⚙️</span><div class="upgrade-feat-text">Tous les paramètres<span>Fiscalité avancée, charges détaillées, travaux</span></div></div>
+      </div>
+      <div class="upgrade-price">
+        <span class="upgrade-price-amount">9€</span><span class="upgrade-price-period">/ mois</span>
+        <div class="upgrade-price-sub">Sans engagement · Résiliable à tout moment</div>
+      </div>
+      <a class="upgrade-cta" href="https://buy.stripe.com/test_bJe9AVfCE0xeeBDa0N4wM00" target="_blank" onclick="trackUpgradeClick()">
+        ✨ Passer à Pro — 9€/mois
+      </a>
+      <button class="upgrade-dismiss" onclick="closeUpgrade()">Continuer avec le plan gratuit</button>
+    </div>
+  </div>
+</div>
+<script>
+// ═══ FREEMIUM CONFIG ═══
+const STRIPE_LINK = 'https://buy.stripe.com/test_bJe9AVfCE0xeeBDa0N4wM00';
+const FREE_ANALYSIS_LIMIT = 3;
+const FREE_SAVE_LIMIT = 3;
+
+// ═══ STATUT PRO (via Supabase metadata) ═══
+async function checkProStatus() {
+  if (!currentUser) return false;
+  try {
+    const { data } = await sb.from('profiles').select('is_pro').eq('id', currentUser.id).single();
+    return data?.is_pro === true;
+  } catch { return false; }
+}
+
+let _isPro = false;
+async function initProStatus() {
+  _isPro = await checkProStatus();
+  updateProUI();
+}
+
+function updateProUI() {
+  // Badge PRO dans le bouton connexion si pro
+  const loginBtn = document.getElementById('trb-btn-login');
+  if (loginBtn && _isPro) {
+    loginBtn.innerHTML = '⭐ PRO';
+    loginBtn.style.background = 'linear-gradient(135deg,#7c3aed,#4f46e5)';
+  }
+  // Compteur analyses gratuites
+  renderFreeCounter();
+}
+
+// ═══ COMPTEUR ANALYSES GRATUITES ═══
+function getFreeAnalysisCount() {
+  return parseInt(localStorage.getItem('iq_free_count') || '0');
+}
+function incrementFreeCount() {
+  const n = getFreeAnalysisCount() + 1;
+  localStorage.setItem('iq_free_count', n);
+  renderFreeCounter();
+  return n;
+}
+function renderFreeCounter() {
+  const existing = document.getElementById('free-counter-badge');
+  if (!existing) return;
+  if (_isPro) { existing.style.display = 'none'; return; }
+  const n = getFreeAnalysisCount();
+  const left = Math.max(0, FREE_ANALYSIS_LIMIT - n);
+  existing.style.display = 'flex';
+  existing.textContent = left > 0 ? `${left} analyse${left>1?'s':''} gratuite${left>1?'s':''} restante${left>1?'s':''}` : '🔒 Limite atteinte';
+  existing.style.background = left > 0 ? 'var(--amber-light)' : 'var(--red-light)';
+  existing.style.borderColor = left > 0 ? 'var(--amber-mid)' : 'var(--red-mid)';
+  existing.style.color = left > 0 ? 'var(--amber)' : 'var(--red)';
+}
+
+// ═══ GATE — vérifie avant chaque analyse ═══
+function canRunAnalysis() {
+  if (_isPro) return true;
+  const n = getFreeAnalysisCount();
+  if (n >= FREE_ANALYSIS_LIMIT) {
+    openUpgrade('analyses');
+    return false;
+  }
+  return true;
+}
+
+// ═══ GATE — vérifie avant chaque sauvegarde ═══
+function canSaveAnalysis() {
+  if (_isPro) return true;
+  const saved = JSON.parse(localStorage.getItem('iq_analyses') || '[]');
+  if (saved.length >= FREE_SAVE_LIMIT) {
+    openUpgrade('save');
+    return false;
+  }
+  return true;
+}
+
+// ═══ GATE — fonctionnalités premium ═══
+function requirePro(feature) {
+  if (_isPro) return true;
+  openUpgrade(feature);
+  return false;
+}
+
+// ═══ MODAL UPGRADE ═══
+function openUpgrade(reason) {
+  document.getElementById('upgrade-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeUpgrade() {
+  document.getElementById('upgrade-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function trackUpgradeClick() {
+  // Optionnel : analytics
+  console.log('Upgrade clicked → Stripe');
+}
+
+// ═══ INIT AU CHARGEMENT ═══
+document.addEventListener('DOMContentLoaded', () => {
+  // Injecter le compteur dans les boutons top-right
+  const trb = document.getElementById('top-right-btns');
+  if (trb) {
+    const counter = document.createElement('div');
+    counter.id = 'free-counter-badge';
+    counter.className = 'free-counter';
+    counter.style.display = 'none';
+    trb.insertBefore(counter, trb.firstChild);
+  }
+  initProStatus();
+});
+</script>  
 </body>
 </html>
