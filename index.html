@@ -1192,9 +1192,9 @@ input[type=range]{width:100%;height:5px;border-radius:10px;outline:none;cursor:p
 <!-- FLOATING NAV TABS -->
 <div class="float-nav" id="float-nav">
   <button class="float-nav-btn active" id="tab-analyse" onclick="showView('analyse')">📊 Analyse</button>
-  <button class="float-nav-btn" id="tab-detail" onclick="showView('detail')">🔬 Détail</button>
-  <button class="float-nav-btn" id="tab-marche" onclick="showView('marche')">🗺️ Marché</button>
-  <button class="float-nav-btn" id="tab-portfolio" onclick="showView('portfolio');renderPortfolio()">💼 Portefeuille</button>
+  <button class="float-nav-btn" id="tab-detail" onclick="if(!requirePro('detail'))return;showView('detail')">🔬 Détail<span class="pro-badge">PRO</span></button>
+  <button class="float-nav-btn" id="tab-marche" onclick="if(!requirePro('marche'))return;showView('marche')">🗺️ Marché<span class="pro-badge">PRO</span></button>
+  <button class="float-nav-btn" id="tab-portfolio" onclick="if(!requirePro('portfolio'))return;showView('portfolio');renderPortfolio()">💼 Portefeuille<span class="pro-badge">PRO</span></button>
 </div>
 
 <!-- BOUTONS FLOTTANTS HAUT DROITE -->
