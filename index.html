@@ -4440,12 +4440,13 @@ function estimerLoyer(){
   hint.style.display='block';
   hint.textContent='Loyer estimé : '+loyerEstime+' €/mois ('+city.loyerM2+' €/m² × '+surf+' m² — '+city.nom+')';
 }
-
+  
 function runAnalysis(isShared){
   if (!isShared && typeof canRunAnalysis === 'function' && !canRunAnalysis()) return;
   const inp=getInp();
   if(!inp.prix||!inp.loyer||!inp.apport){alert('Renseignez au minimum : Prix d\'achat, Loyer mensuel et Apport.');return;}
   R=compute(inp);
+  if (!isShared && typeof incrementFreeCount === 'function') incrementFreeCount(); // ← ajouter ici
   // Close params page, show app BEFORE rendering (so DOM elements exist and are visible)
   const ppEl=document.getElementById('page-params');
   if(ppEl) ppEl.style.display='none';
@@ -4472,6 +4473,7 @@ function runAnalysis(isShared){
   setMode(localStorage.getItem('reia_mode')||'essai');
   renderHistory();
 }
+  
 function shareAnalysis(){
   if(!R){alert('Lancez d\'abord une analyse.');return;}
   if (typeof canSaveAnalysis === 'function' && !canSaveAnalysis()) return;
