@@ -741,6 +741,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .fade-in{animation:fadeUp .3s ease}
 
 /* ═══ FLOATING NAV TABS ═══ */
+.logo-float{position:fixed;top:16px;left:20px;z-index:210;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:6px 14px 6px 8px;box-shadow:var(--shadow);cursor:pointer;transition:all .18s}
+.logo-float:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,27,61,.15)}
+.logo-float .logo-mark{width:26px;height:26px;border-radius:8px}
+.logo-float span{font-size:13px;font-weight:800;color:var(--text)}
+body.params-mode .logo-float{display:none!important}
 .float-nav{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:400;
   display:none;align-items:center;gap:4px;
   background:rgba(255,255,255,.92);backdrop-filter:blur(12px);
