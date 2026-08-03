@@ -3623,7 +3623,6 @@ function skipToApp(){
   const appEl = document.querySelector('.app');
   if(appEl) appEl.style.display = 'block';
   document.getElementById('app-shell').classList.add('header-hidden');
-  const ab=document.getElementById('app-bar');if(ab)ab.style.display='flex';
   setMode(localStorage.getItem('reia_mode') || 'essai');
 }
 
