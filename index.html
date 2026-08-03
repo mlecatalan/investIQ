@@ -2244,6 +2244,21 @@ let apiKey='via-worker'; // Clé gérée côté serveur
 /* ════════════════════════════════════════
    LANDING
 ════════════════════════════════════════ */
+function goToLanding(){
+  var landing = document.getElementById('landing');
+  var shell = document.getElementById('app-shell');
+  var params = document.getElementById('page-params');
+  var app = document.querySelector('.app');
+  if(params) params.style.display = 'none';
+  if(app) app.style.display = 'none';
+  if(shell){ shell.style.display = 'none'; shell.classList.remove('header-hidden'); }
+  document.body.classList.remove('params-mode');
+  if(typeof closePanel === 'function') closePanel();
+  const logo = document.getElementById('logo-float');
+  if(logo) logo.classList.remove('visible');
+  if(landing) landing.style.display = '';
+  updateLandingSecondaryCtas();
+}
 function goToAccount(){
   var landing = document.getElementById('landing');
   if(landing) landing.style.display = 'none';
