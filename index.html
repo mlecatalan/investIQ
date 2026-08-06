@@ -2226,15 +2226,22 @@ function goToLanding(){
   if(landing) landing.style.display = '';
   updateLandingSecondaryCtas();
 }
-function goToAccount(){
+function goToAccount() {
   var landing = document.getElementById('landing');
-  if(landing) landing.style.display = 'none';
+  if (landing) landing.style.display = 'none';
+
+  // On garde l'app shell visible
   var shell = document.getElementById('app-shell');
-  if(shell) shell.style.display = 'none';
+  if (shell) shell.style.display = 'block';
+
+  // On cache la page paramètres, mais pas l'app entière
   var params = document.getElementById('page-params');
-  if(params) params.style.display = 'none';
+  if (params) params.style.display = 'none';
+
   var app = document.querySelector('.app');
-  if(app) app.style.display = 'none';
+  if (app) app.style.display = 'block';
+
+  // Affiche la vue compte à l'intérieur de l'app
   openAccountPage();
 }
 function openAccountPage(){
